@@ -556,13 +556,38 @@ double plane_intersection(double* Ro, double* Rd, double* C, double* N){ //Calcu
 	return 0;	//else just return 0
 }
 
-double* render_light(Object** object_array, int object_counter, double best_t, int best_index, double* Ro, double* Rd){
+double fang(){	//Return angular attenuation function
+	return 1;	//Since we aren't using spotlights, we can just return 1
+}
+
+double frad(double a0, double a1, double a2, double distance){	//Return radial attenuation
+	if(distance == 0) return 1;
+	return 1/(a0 + a1*distance + a2*sqr(distance));
+}
+
+double* diffuse(double* L, double* N, double* Cd, double* Ci){	//Return diffuse color value
+	//Cd is diffuse color, and Ci is light color
+	double* diffused_color = malloc(sizeof(double)*3);
+	diffused_color[0] = (L[0] * N[0] + L[1] * N[1] + L[2] * N[2])*Cd[0]*Ci[0];
+	diffused_color[1] = (L[0] * N[0] + L[1] * N[1] + L[2] * N[2])*Cd[1]*Ci[1];
+	diffused_color[2] = (L[0] * N[0] + L[1] * N[1] + L[2] * N[2])*Cd[2]*Ci[2];
+	return diffused_color;
+}
+
+double* render_light(Object** object_array, int object_counter, double best_t,
+					int best_index, double* Ro, double* Rd){
 	double t = 0;
 	int parse_count = 1;
 	int parse_count1 = 1;
 	double Ron[3];
 	double Rdn[3];
 	double* color = malloc(sizeof(double)*3);
+	double* diffused_color;
+	double N[3];
+	double L[3];
+	double R[3];
+	double V[3];
+	double kd = 75;
 	int closest_shadow_index = -1;
 	
 	
@@ -606,16 +631,59 @@ double* render_light(Object** object_array, int object_counter, double best_t, i
 					break;
 				}
 			}
+			
+			
+			//color[0] += frad() * fang() * (diffuse + specular);
+			//color[1] += frad() * fang() * (diffuse + specular);
+			//color[2] += frad() * fang() * (diffuse + specular);
+			
+			L[0] = Rdn[0];
+			L[1] = Rdn[1];
+			L[2] = Rdn[2];
+			//R = reflect(L);
+			V[0] = Rd[0];
+			V[1] = Rd[1];
+			V[2] = Rd[2];
+			
 			if(t <= 0){
 				if(object_array[best_index]->kind == 1){
-					color[0] += object_array[best_index]->sphere.diffuse_color[0];
-					color[1] += object_array[best_index]->sphere.diffuse_color[1];
-					color[2] += object_array[best_index]->sphere.diffuse_color[2];
+					//N, L, R, V
+					N[0] = Ron[0] - object_array[best_index]->sphere.position[0];
+					N[1] = Ron[1] - object_array[best_index]->sphere.position[1];
+					N[2] = Ron[2] - object_array[best_index]->sphere.position[2];
+					normalize(N);
+					
+					diffused_color = diffuse(L, N, object_array[best_index]->sphere.diffuse_color,
+												object_array[parse_count]->light.color);
+					
 				}else if(object_array[best_index]->kind == 2){
-					color[0] += object_array[best_index]->plane.diffuse_color[0];
-					color[1] += object_array[best_index]->plane.diffuse_color[1];
-					color[2] += object_array[best_index]->plane.diffuse_color[2];
+					//N, L, R, V
+					N[0] = object_array[best_index]->plane.normal[0]; //Get normal of plane
+					N[1] = object_array[best_index]->plane.normal[1];
+					N[2] = object_array[best_index]->plane.normal[2];
+					
+					if(N[2] > 0){
+						N[0] = -N[0];
+						N[1] = -N[1];
+						N[2] = -N[2];
+					}
+					
+					normalize(N);
+					
+					diffused_color = diffuse(L, N, object_array[best_index]->plane.diffuse_color,
+												object_array[parse_count]->light.color);
+
 				}
+				color[0] += frad(object_array[parse_count]->light.radial_a0,
+								object_array[parse_count]->light.radial_a1,
+								object_array[parse_count]->light.radial_a2, best_t) * fang() * diffused_color[0] * kd;
+				color[1] += frad(object_array[parse_count]->light.radial_a0,
+								object_array[parse_count]->light.radial_a1,
+								object_array[parse_count]->light.radial_a2, best_t) * fang() * diffused_color[1] * kd;
+				color[2] += frad(object_array[parse_count]->light.radial_a0,
+								object_array[parse_count]->light.radial_a1,
+								object_array[parse_count]->light.radial_a2, best_t) * fang() * diffused_color[2] * kd;
+				free(diffused_color);
 			}
 			t = 0;
 			parse_count1 = 1;
