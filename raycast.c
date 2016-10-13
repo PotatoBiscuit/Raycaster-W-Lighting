@@ -239,9 +239,15 @@ void store_value(Object* input_object, int type_of_field, double input_value, do
 			input_object->plane.position[1] = input_vector[1];
 			input_object->plane.position[2] = input_vector[2];
 		}else if(type_of_field == 6){
-			input_object->plane.normal[0] = input_vector[0];
-			input_object->plane.normal[1] = input_vector[1];
-			input_object->plane.normal[2] = input_vector[2];
+			if(input_vector[2] > 0){
+				input_object->plane.normal[0] = -input_vector[0];
+				input_object->plane.normal[1] = -input_vector[1];
+				input_object->plane.normal[2] = -input_vector[2];
+			}else{
+				input_object->plane.normal[0] = input_vector[0];
+				input_object->plane.normal[1] = input_vector[1];
+				input_object->plane.normal[2] = input_vector[2];
+			}
 			normalize(input_object->plane.normal);
 		}else{
 			fprintf(stderr, "Error: Planes only have 'radius', 'specular_color', 'diffuse_color', or 'normal' fields, line:%d\n", line);
@@ -280,7 +286,7 @@ void store_value(Object* input_object, int type_of_field, double input_value, do
 	}
 }
 
-int read_scene(char* filename, Object** object_array) {	//Parses json file, and stores object information into object_array
+int read_scene(char* filename, Object** object_array) {	//Parses json file, and stores object information into object_array	RADIAL AND ANGULAR FIELDS NOT REQUIRED
   int c;
   int num_objects = 0;
   int object_counter = -1;
@@ -556,7 +562,7 @@ double plane_intersection(double* Ro, double* Rd, double* C, double* N){ //Calcu
 	return 0;	//else just return 0
 }
 
-double fang(){	//Return angular attenuation function
+double fang(){	//Return angular attenuation function FIX THIS
 	return 1;	//Since we aren't using spotlights, we can just return 1
 }
 
@@ -574,8 +580,31 @@ double* diffuse(double* L, double* N, double* Cd, double* Ci){	//Return diffuse 
 	return diffused_color;
 }
 
+double* specular(double* R, double* V, double* Cs, double* Ci){
+	double* speculared_color = malloc(sizeof(double)*3);
+	speculared_color[0] = (R[0]*V[0] + R[1]*V[1] + R[2]*V[2])*Cs[0]*Ci[0];
+	speculared_color[1] = (R[0]*V[0] + R[1]*V[1] + R[2]*V[2])*Cs[1]*Ci[1];
+	speculared_color[2] = (R[0]*V[0] + R[1]*V[1] + R[2]*V[2])*Cs[2]*Ci[2];
+	if(speculared_color[0] < 0) speculared_color[0] = 0;
+	if(speculared_color[1] < 0) speculared_color[1] = 0;
+	if(speculared_color[2] < 0) speculared_color[2] = 0;
+	return speculared_color;
+}
+
+double calculate_distance(double* input_vector){
+	return sqrt(sqr(input_vector[0]) + sqr(input_vector[1]) + sqr(input_vector[2]));
+}
+
+double* reflect(double* L, double* N){
+	double* reflect_vector = malloc(sizeof(double)*3);
+	reflect_vector[0] = L[0] - 2*((L[0] * N[0]) + (L[1] * N[1]) + (L[2] * N[2])) * N[0];
+	reflect_vector[1] = L[1] - 2*((L[0] * N[0]) + (L[1] * N[1]) + (L[2] * N[2])) * N[1];
+	reflect_vector[2] = L[2] - 2*((L[0] * N[0]) + (L[1] * N[1]) + (L[2] * N[2])) * N[2];
+	return reflect_vector;
+}
+
 double* render_light(Object** object_array, int object_counter, double best_t,
-					int best_index, double* Ro, double* Rd){
+					int best_index, double* Ro, double* Rd){	//ADD SUPPORT FOR DEFAULT radial and angular values
 	double t = 0;
 	int parse_count = 1;
 	int parse_count1 = 1;
@@ -583,11 +612,14 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 	double Rdn[3];
 	double* color = malloc(sizeof(double)*3);
 	double* diffused_color;
+	double* speculared_color;
 	double N[3];
 	double L[3];
-	double R[3];
+	double* R;
 	double V[3];
 	double kd = 75;
+	double ks = 7;
+	double distance_from_light;
 	int closest_shadow_index = -1;
 	
 	
@@ -608,7 +640,9 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 			Rdn[0] = object_array[parse_count]->light.position[0] - Ron[0];
 			Rdn[1] = object_array[parse_count]->light.position[1] - Ron[1];
 			Rdn[2] = object_array[parse_count]->light.position[2] - Ron[2];
+			distance_from_light = calculate_distance(Rdn);
 			normalize(Rdn);
+			
 			while(parse_count1 < object_counter + 1){
 				if(parse_count1 == best_index){
 					parse_count1++;
@@ -621,14 +655,17 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 				}else if(object_array[parse_count1]->kind == 2){
 					t = plane_intersection(Ron, Rdn, object_array[parse_count1]->plane.position,
 											object_array[parse_count1]->plane.normal);
+					t = 0;
 					parse_count1++;
 				}else{
 					parse_count1++;
 					continue;
 				}
 				
-				if(t > 0){
+				if(t > 0 && t < distance_from_light){
 					break;
+				}else if(t > 0 && t > distance_from_light){
+					t = 0;
 				}
 			}
 			
@@ -640,7 +677,7 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 			L[0] = Rdn[0];
 			L[1] = Rdn[1];
 			L[2] = Rdn[2];
-			//R = reflect(L);
+			
 			V[0] = Rd[0];
 			V[1] = Rd[1];
 			V[2] = Rd[2];
@@ -653,8 +690,13 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 					N[2] = Ron[2] - object_array[best_index]->sphere.position[2];
 					normalize(N);
 					
+					R = reflect(L, N);
+					
 					diffused_color = diffuse(L, N, object_array[best_index]->sphere.diffuse_color,
 												object_array[parse_count]->light.color);
+					speculared_color = specular(R, V, object_array[best_index]->sphere.specular_color,
+												object_array[parse_count]->light.color);
+					
 					
 				}else if(object_array[best_index]->kind == 2){
 					//N, L, R, V
@@ -662,28 +704,31 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 					N[1] = object_array[best_index]->plane.normal[1];
 					N[2] = object_array[best_index]->plane.normal[2];
 					
-					if(N[2] > 0){
-						N[0] = -N[0];
-						N[1] = -N[1];
-						N[2] = -N[2];
-					}
 					
-					normalize(N);
+					R = reflect(L, N);
 					
 					diffused_color = diffuse(L, N, object_array[best_index]->plane.diffuse_color,
 												object_array[parse_count]->light.color);
+					speculared_color = specular(R, V, object_array[best_index]->plane.specular_color,
+												object_array[parse_count]->light.color);
 
+				}
+				else{
+					fprintf(stderr,"Error: Tried to render light as a shape primitive");
+					exit(1);
 				}
 				color[0] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
-								object_array[parse_count]->light.radial_a2, best_t) * fang() * diffused_color[0] * kd;
+								object_array[parse_count]->light.radial_a2, best_t) * fang() * (diffused_color[0] * kd + speculared_color[0]*ks);
 				color[1] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
-								object_array[parse_count]->light.radial_a2, best_t) * fang() * diffused_color[1] * kd;
+								object_array[parse_count]->light.radial_a2, best_t) * fang() * (diffused_color[1] * kd + speculared_color[1]*ks);
 				color[2] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
-								object_array[parse_count]->light.radial_a2, best_t) * fang() * diffused_color[2] * kd;
+								object_array[parse_count]->light.radial_a2, best_t) * fang() * (diffused_color[2] * kd + speculared_color[2]*ks);
 				free(diffused_color);
+				free(speculared_color);
+				free(R);
 			}
 			t = 0;
 			parse_count1 = 1;
