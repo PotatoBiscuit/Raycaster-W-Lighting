@@ -291,7 +291,8 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
   int num_objects = 0;
   int object_counter = -1;
   int height = 0, width = 0, radius = 0, diffuse_color = 0, specular_color = 0, position = 0, normal = 0;	//These will serve as boolean operators
-  int radial_a2 = 0, radial_a1 = 0, radial_a0 = 0, angular_a0 = 0, color = 0;
+  int radial_a2 = 0, radial_a1 = 0, radial_a0 = 0, angular_a0 = 0, color = 0, direction = 0;
+  int is_light = 0;
   FILE* json = fopen(filename, "r");	//Open our json file
 
   if (json == NULL) {	//If the file does not exist, throw an error
@@ -361,11 +362,13 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
       } else if (strcmp(value, "light") == 0){
 		  object_array[object_counter]->kind = 3;
 		  position = 1;
+		  direction = 1;
 		  color = 1;
 		  radial_a0 = 1;
 		  radial_a1 = 1;
 		  radial_a2 = 1;
 		  angular_a0 = 1;
+		  is_light = 1;
 	  } else {
 		  fprintf(stderr, "Error: Unknown type, \"%s\", on line number %d.\n", value, line);
 		  exit(1);
@@ -379,6 +382,16 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 		if (c == '}') {
 		  // stop parsing this object
 		  //If a required field is missing from an object, throw an error
+		  if(is_light == 1){
+			  is_light = 0;
+			  if(direction == 1 && position == 1){
+				  fprintf(stderr, "Error: Required field missing from object at line:%d\n", line);
+			      exit(1);
+			  }else{
+				  position = 0;
+				  direction = 0;
+			  }
+		  }
 		  if(height == 1 || width == 1 || position == 1 || normal == 1 || color == 1 || radius == 1 ||
 		  radial_a0 == 1 || radial_a1 == 1 || radial_a2 == 1 || angular_a0 == 1 || diffuse_color == 1 || specular_color == 1){
 			  fprintf(stderr, "Error: Required field missing from object at line:%d\n", line);
@@ -443,6 +456,7 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 		  }else if(strcmp(key, "direction") == 0){
 			  double* value = next_vector(json);
 			  store_value(object_array[object_counter], 12, 0, value);
+			  direction = 0;
 		  }else{
 				fprintf(stderr, "Error: Unknown property, \"%s\", on line %d.\n",
 				key, line);
@@ -562,13 +576,15 @@ double plane_intersection(double* Ro, double* Rd, double* C, double* N){ //Calcu
 	return 0;	//else just return 0
 }
 
-double fang(){	//Return angular attenuation function FIX THIS
+double fang(double a0){	//Return angular attenuation function FIX THIS
 	return 1;	//Since we aren't using spotlights, we can just return 1
 }
 
 double frad(double a0, double a1, double a2, double distance){	//Return radial attenuation
 	if(distance == 0) return 1;
-	return 1/(a0 + a1*distance + a2*sqr(distance));
+	double denominator = (a0 + a1*distance + a2*sqr(distance));
+	if (denominator == 0) return 1;
+	return 1/denominator;
 }
 
 double* diffuse(double* L, double* N, double* Cd, double* Ci){	//Return diffuse color value
@@ -637,11 +653,20 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 	
 	while(parse_count < object_counter + 1){
 		if(object_array[parse_count]->kind == 3){
-			Rdn[0] = object_array[parse_count]->light.position[0] - Ron[0];
-			Rdn[1] = object_array[parse_count]->light.position[1] - Ron[1];
-			Rdn[2] = object_array[parse_count]->light.position[2] - Ron[2];
-			distance_from_light = calculate_distance(Rdn);
-			normalize(Rdn);
+			if(object_array[parse_count]->light.direction[0] == 0 &&
+			   object_array[parse_count]->light.direction[1] == 0 &&
+			   object_array[parse_count]->light.direction[2] == 0){
+				Rdn[0] = object_array[parse_count]->light.position[0] - Ron[0];
+				Rdn[1] = object_array[parse_count]->light.position[1] - Ron[1];
+				Rdn[2] = object_array[parse_count]->light.position[2] - Ron[2];
+				distance_from_light = calculate_distance(Rdn);
+				normalize(Rdn);
+			}else{
+				Rdn[0] = -object_array[parse_count]->light.direction[0];
+				Rdn[1] = -object_array[parse_count]->light.direction[1];
+				Rdn[2] = -object_array[parse_count]->light.direction[2];
+				distance_from_light = 9999999;
+			}
 			
 			while(parse_count1 < object_counter + 1){
 				if(parse_count1 == best_index){
@@ -668,11 +693,6 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 					t = 0;
 				}
 			}
-			
-			
-			//color[0] += frad() * fang() * (diffuse + specular);
-			//color[1] += frad() * fang() * (diffuse + specular);
-			//color[2] += frad() * fang() * (diffuse + specular);
 			
 			L[0] = Rdn[0];
 			L[1] = Rdn[1];
@@ -719,13 +739,19 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 				}
 				color[0] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
-								object_array[parse_count]->light.radial_a2, best_t) * fang() * (diffused_color[0] * kd + speculared_color[0]*ks);
+								object_array[parse_count]->light.radial_a2, best_t) *
+								fang(object_array[parse_count]->light.angular_a0) *
+								(diffused_color[0] * kd + speculared_color[0]*ks);
 				color[1] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
-								object_array[parse_count]->light.radial_a2, best_t) * fang() * (diffused_color[1] * kd + speculared_color[1]*ks);
+								object_array[parse_count]->light.radial_a2, best_t) *
+								fang(object_array[parse_count]->light.angular_a0) *
+								(diffused_color[1] * kd + speculared_color[1]*ks);
 				color[2] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
-								object_array[parse_count]->light.radial_a2, best_t) * fang() * (diffused_color[2] * kd + speculared_color[2]*ks);
+								object_array[parse_count]->light.radial_a2, best_t) *
+								fang(object_array[parse_count]->light.angular_a0) *
+								(diffused_color[2] * kd + speculared_color[2]*ks);
 				free(diffused_color);
 				free(speculared_color);
 				free(R);
