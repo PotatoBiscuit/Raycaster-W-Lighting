@@ -580,8 +580,8 @@ double sphere_intersection(double* Ro, double* Rd, double* C, double radius){ //
 	double det = sqr(b) - 4*a*c;
 	if(det < 0) return 0;	//If there are no real solutions return 0
 	
-	t0 = (-b - det)/(2*a);	//Calculate both solutions
-	t1 = (-b + det)/(2*a);
+	t0 = (-b - sqrt(det))/(2*a);	//Calculate both solutions
+	t1 = (-b + sqrt(det))/(2*a);
 	if(t0 <= 0 && t1 <= 0) return 0; //If both solutions are less than 0, return 0
 	if(t0 <= 0 && t1 > 0) return t1; //If only t1 is greater than 0, return t1
 	if(t1 <= 0 && t0 > 0) return t0; //If only t0 is greater than 0, return t0
@@ -624,11 +624,17 @@ double* diffuse(double* L, double* N, double* Cd, double* Ci){	//Return diffuse 
 	return diffused_color;
 }
 
-double* specular(double* R, double* V, double* Cs, double* Ci){
+double* specular(double* R, double* V, double* Cs, double* Ci, double* N, double* L){
 	double* speculared_color = malloc(sizeof(double)*3);
-	speculared_color[0] = (R[0]*V[0] + R[1]*V[1] + R[2]*V[2])*Cs[0]*Ci[0];
-	speculared_color[1] = (R[0]*V[0] + R[1]*V[1] + R[2]*V[2])*Cs[1]*Ci[1];
-	speculared_color[2] = (R[0]*V[0] + R[1]*V[1] + R[2]*V[2])*Cs[2]*Ci[2];
+	if(N[0]*L[0] + N[1]*L[1] + N[2]*L[2] <= 0 || R[0]*V[0] + R[1]*V[1] + R[2]*V[2] <= 0){
+		speculared_color[0] = 0;
+		speculared_color[1] = 0;
+		speculared_color[2] = 0;
+		return speculared_color;
+	}
+	speculared_color[0] = pow((R[0]*V[0] + R[1]*V[1] + R[2]*V[2]), 20)*Cs[0]*Ci[0];
+	speculared_color[1] = pow((R[0]*V[0] + R[1]*V[1] + R[2]*V[2]), 20)*Cs[1]*Ci[1];
+	speculared_color[2] = pow((R[0]*V[0] + R[1]*V[1] + R[2]*V[2]), 20)*Cs[2]*Ci[2];
 	if(speculared_color[0] < 0) speculared_color[0] = 0;
 	if(speculared_color[1] < 0) speculared_color[1] = 0;
 	if(speculared_color[2] < 0) speculared_color[2] = 0;
@@ -661,8 +667,6 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 	double L[3];
 	double* R;
 	double V[3];
-	double kd = 75;
-	double ks = 7;
 	double distance_from_light;
 	int closest_shadow_index = -1;
 	
@@ -703,12 +707,11 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 				}
 				if(object_array[parse_count1]->kind == 1){
 					t = sphere_intersection(Ron, Rdn, object_array[parse_count1]->sphere.position,
-									object_array[parse_count1]->sphere.radius);
+									object_array[parse_count1]->sphere.radius);			
 					parse_count1++;
 				}else if(object_array[parse_count1]->kind == 2){
 					t = plane_intersection(Ron, Rdn, object_array[parse_count1]->plane.position,
 											object_array[parse_count1]->plane.normal);
-					t = 0;
 					parse_count1++;
 				}else{
 					parse_count1++;
@@ -743,8 +746,7 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 					diffused_color = diffuse(L, N, object_array[best_index]->sphere.diffuse_color,
 												object_array[parse_count]->light.color);
 					speculared_color = specular(R, V, object_array[best_index]->sphere.specular_color,
-												object_array[parse_count]->light.color);
-					
+												object_array[parse_count]->light.color, N, L);
 					
 				}else if(object_array[best_index]->kind == 2){
 					//N, L, R, V
@@ -758,7 +760,7 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 					diffused_color = diffuse(L, N, object_array[best_index]->plane.diffuse_color,
 												object_array[parse_count]->light.color);
 					speculared_color = specular(R, V, object_array[best_index]->plane.specular_color,
-												object_array[parse_count]->light.color);
+												object_array[parse_count]->light.color, N, L);
 
 				}
 				else{
@@ -769,17 +771,17 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 								object_array[parse_count]->light.radial_a1,
 								object_array[parse_count]->light.radial_a2, best_t) *
 								fang(object_array[parse_count]->light.angular_a0) *
-								(diffused_color[0] * kd + speculared_color[0]*ks);
+								(diffused_color[0] + speculared_color[0]);
 				color[1] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
 								object_array[parse_count]->light.radial_a2, best_t) *
 								fang(object_array[parse_count]->light.angular_a0) *
-								(diffused_color[1] * kd + speculared_color[1]*ks);
+								(diffused_color[1] + speculared_color[1]);
 				color[2] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
 								object_array[parse_count]->light.radial_a2, best_t) *
 								fang(object_array[parse_count]->light.angular_a0) *
-								(diffused_color[2] * kd + speculared_color[2]*ks);
+								(diffused_color[2] + speculared_color[2]);
 				free(diffused_color);
 				free(speculared_color);
 				free(R);
@@ -856,11 +858,12 @@ void raycast_scene(Object** object_array, int object_counter, double** pixel_buf
 			}
 
 			
-			if(best_t > 0 && best_t != INFINITY){	//If if our closest intersection is valid...
+			if(best_t > 0 && best_t != INFINITY){	//If our closest intersection is valid...
 				color = render_light(object_array, object_counter, best_t, best_index, Ro, Rd);
 				pixel_buffer[(int)((N*M) - (floor(pixel_count/N) + 1)*N)+ pixel_count%N][0] = color[0];
 				pixel_buffer[(int)((N*M) - (floor(pixel_count/N) + 1)*N)+ pixel_count%N][1] = color[1];
 				pixel_buffer[(int)((N*M) - (floor(pixel_count/N) + 1)*N)+ pixel_count%N][2] = color[2];
+				
 				free(color);
 				parse_count = 1;
 			}else{
