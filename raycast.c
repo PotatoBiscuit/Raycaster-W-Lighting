@@ -31,6 +31,7 @@ typedef struct {	//Create structure to be used for our object_array
 	  double radial_a1;
 	  double radial_a0;
 	  double angular_a0;
+	  double theta;
 	} light;
   };
 } Object;
@@ -155,7 +156,7 @@ double clamp(double input){
 
 void store_value(Object* input_object, int type_of_field, double input_value, double* input_vector){
 	//type_of_field values: 0 = width, 1 = height, 2 = radius, 3 = diffuse_color, 4 = specular_color, 5 = position, 6 = normal
-	//7 = radial_a0, 8 = radial_a1, 9 = radial_a2, 10 = angular_a0, 11 = color, 12 = direction
+	//7 = radial_a0, 8 = radial_a1, 9 = radial_a2, 10 = angular_a0, 11 = color, 12 = direction, 13 = theta
 	//if input_value or input_vector aren't used, a 0 or NULL value should be passed in
 	if(input_object->kind == 0){	//If the object is a camera, store the input into its width or height fields
 		if(type_of_field == 0){
@@ -275,6 +276,8 @@ void store_value(Object* input_object, int type_of_field, double input_value, do
 			input_object->light.radial_a2 = input_value;
 		}else if(type_of_field == 10){
 			input_object->light.angular_a0 = input_value;
+		}else if(type_of_field == 13){
+			input_object->light.theta = input_value;
 		}else{
 			fprintf(stderr, "Error: Lights must have the fields listed, line:%d\n", line);
 			fprintf(stderr, "Color\nPosition\nDirection\nradial-n0\nradial-n1\nradial-n2\nangular-n0\n");
@@ -286,12 +289,12 @@ void store_value(Object* input_object, int type_of_field, double input_value, do
 	}
 }
 
-int read_scene(char* filename, Object** object_array) {	//Parses json file, and stores object information into object_array	RADIAL AND ANGULAR FIELDS NOT REQUIRED
+int read_scene(char* filename, Object** object_array) {	//Parses json file, and stores object information into object_array
   int c;
   int num_objects = 0;
   int object_counter = -1;
   int height = 0, width = 0, radius = 0, diffuse_color = 0, specular_color = 0, position = 0, normal = 0;	//These will serve as boolean operators
-  int radial_a2 = 0, radial_a1 = 0, radial_a0 = 0, angular_a0 = 0, color = 0, direction = 0;
+  int radial_a2 = 0, radial_a1 = 0, radial_a0 = 0, angular_a0 = 0, color = 0, direction = 0, theta = 0;
   int is_light = 0;
   FILE* json = fopen(filename, "r");	//Open our json file
 
@@ -368,6 +371,7 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 		  radial_a1 = 1;
 		  radial_a2 = 1;
 		  angular_a0 = 1;
+		  theta = 1;
 		  is_light = 1;
 	  } else {
 		  fprintf(stderr, "Error: Unknown type, \"%s\", on line number %d.\n", value, line);
@@ -393,9 +397,29 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 			  }
 		  }
 		  if(height == 1 || width == 1 || position == 1 || normal == 1 || color == 1 || radius == 1 ||
-		  radial_a0 == 1 || radial_a1 == 1 || radial_a2 == 1 || angular_a0 == 1 || diffuse_color == 1 || specular_color == 1){
+		  diffuse_color == 1 || specular_color == 1){
 			  fprintf(stderr, "Error: Required field missing from object at line:%d\n", line);
 			  exit(1);
+		  }
+		  if(radial_a0 == 1){
+			  store_value(object_array[object_counter], 7, 1, NULL);
+			  radial_a0 = 0;
+		  }
+		  if(radial_a1 == 1){
+			  store_value(object_array[object_counter], 8, 0, NULL);
+			  radial_a1 = 0;
+		  }
+		  if(radial_a2 == 1){
+			  store_value(object_array[object_counter], 9, 0, NULL);
+			  radial_a2 = 0;
+		  }
+		  if(angular_a0 == 1){
+			  store_value(object_array[object_counter], 10, 0, NULL);
+			  angular_a0 = 0;
+		  }
+		  if(theta == 1){
+			  store_value(object_array[object_counter], 13, 0, NULL);
+			  theta = 0;
 		  }
 		  break;
 		} else if (c == ',') {
@@ -457,6 +481,10 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 			  double* value = next_vector(json);
 			  store_value(object_array[object_counter], 12, 0, value);
 			  direction = 0;
+		  }else if(strcmp(key, "theta") == 0){
+			  double value = next_number(json);
+			  store_value(object_array[object_counter], 13, value, NULL);
+			  theta = 0;
 		  }else{
 				fprintf(stderr, "Error: Unknown property, \"%s\", on line %d.\n",
 				key, line);
@@ -576,7 +604,7 @@ double plane_intersection(double* Ro, double* Rd, double* C, double* N){ //Calcu
 	return 0;	//else just return 0
 }
 
-double fang(double a0){	//Return angular attenuation function FIX THIS
+double fang(double a0){	//Return angular attenuation function
 	return 1;	//Since we aren't using spotlights, we can just return 1
 }
 
