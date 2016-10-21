@@ -1,10 +1,10 @@
-# Basic-Raycaster
-This is a raycaster that handles plane and sphere primitives
+# Raycaster with Lighting
+This is a raycaster that handles plane and sphere primitives, as well as spotlights and point lights
 
 
 Compile Instructions (ignore any warnings):
 
-gcc raycast.c -o raycast -lm
+gcc raycast.c -o raycast --std=c99 -lm
 
 or use the Makefile
 
