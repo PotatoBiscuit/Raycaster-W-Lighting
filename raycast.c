@@ -150,12 +150,13 @@ static inline void normalize(double* v) {	//Normalize any vectors passed into th
 	v[2] /= len;
 }
 
-double clamp(double input){
+double clamp(double input){		//Return 1 if the input is above one, and return 0 if the input is negative
 	if(input > 1) return 1;
 	if(input < 0) return 0;
 	return input;
 }
 
+//This function takes an input value or vector, and puts it into our object array
 void store_value(Object* input_object, int type_of_field, double input_value, double* input_vector){
 	//type_of_field values: 0 = width, 1 = height, 2 = radius, 3 = diffuse_color, 4 = specular_color, 5 = position, 6 = normal
 	//7 = radial_a0, 8 = radial_a1, 9 = radial_a2, 10 = angular_a0, 11 = color, 12 = direction, 13 = theta
@@ -291,7 +292,7 @@ void store_value(Object* input_object, int type_of_field, double input_value, do
 	}
 }
 
-double degrees_to_radians(double value){
+double degrees_to_radians(double value){	//Converts input from degrees to radians
 	return 2*M_PI*value/360;
 }
 
@@ -367,7 +368,7 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 		  normal = 1;
 		  specular_color = 1;
 		  diffuse_color = 1;
-      } else if (strcmp(value, "light") == 0){
+      } else if (strcmp(value, "light") == 0){		//If light, set object kind to 3
 		  object_array[object_counter]->kind = 3;
 		  position = 1;
 		  color = 1;
@@ -390,27 +391,27 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 		  // stop parsing this object
 		  //If a required field is missing from an object, throw an error
 		  if(height == 1 || width == 1 || position == 1 || normal == 1 || color == 1 || radius == 1 ||
-		  diffuse_color == 1 || specular_color == 1 || position == 1){
+		  diffuse_color == 1 || specular_color == 1 || position == 1){	//If a required value was not in the json file, throw error
 			  fprintf(stderr, "Error: Required field missing from object at line:%d\n", line);
 			  exit(1);
 		  }
-		  if(radial_a0 == 1){
+		  if(radial_a0 == 1){	//If radial_a0 did not exist in json file, store the default value 1
 			  store_value(object_array[object_counter], 7, 1, NULL);
 			  radial_a0 = 0;
 		  }
-		  if(radial_a1 == 1){
+		  if(radial_a1 == 1){	//If radial_a1 did not exist in json file, store the default value 0
 			  store_value(object_array[object_counter], 8, 0, NULL);
 			  radial_a1 = 0;
 		  }
-		  if(radial_a2 == 1){
+		  if(radial_a2 == 1){	//If radial_a2 did not exist in json file, store the default value 0
 			  store_value(object_array[object_counter], 9, 0, NULL);
 			  radial_a2 = 0;
 		  }
-		  if(angular_a0 == 1){
+		  if(angular_a0 == 1){	//If angular_a0 did not exist in json file, store default value 0
 			  store_value(object_array[object_counter], 10, 0, NULL);
 			  angular_a0 = 0;
 		  }
-		  if(theta == 1){
+		  if(theta == 1){	//If theta did not exist in json file, store default value 0
 			  store_value(object_array[object_counter], 13, 0, NULL);
 			  theta = 0;
 		  }
@@ -477,13 +478,13 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
 			  double value = next_number(json);
 			  store_value(object_array[object_counter], 13, degrees_to_radians(value), NULL);
 			  theta = 0;
-		  }else{
+		  }else{	//If there was an invalid field, throw an error
 				fprintf(stderr, "Error: Unknown property, \"%s\", on line %d.\n",
 				key, line);
 				exit(1);
 		  }
 		  skip_ws(json);
-		} else {
+		} else {	//If a ',' or '}' was not received, throw an error
 		  fprintf(stderr, "Error: Unexpected value on line %d\n", line);
 		  exit(1);
 		}
@@ -497,7 +498,7 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
       } else if (c == ']') {	//If there is an ending bracket, it is the end JSON file
 	fclose(json);
 	return object_counter;
-      } else {
+      } else {	//Throw error if we don't encounter a ',' or ']'
 	fprintf(stderr, "Error: Expecting ',' or ']' on line %d.\n", line);
 	exit(1);
       }
@@ -505,7 +506,7 @@ int read_scene(char* filename, Object** object_array) {	//Parses json file, and 
   }
 }
 
-void argument_checker(int c, char** argv){
+void argument_checker(int c, char** argv){	//Check input arguments for validity
 	int i = 0;
 	int j = 0;
 	char* periodPointer;
@@ -596,52 +597,61 @@ double plane_intersection(double* Ro, double* Rd, double* C, double* N){ //Calcu
 	return 0;	//else just return 0
 }
 
-double fang(double a0, double theta, double* vO, double* vL){	//Return angular attenuation function
-	if(theta == 0) return 1;	//Since we aren't using spotlights, we can just return 1
+double fang(double a0, double theta, double* vO, double* vL){	//Return angular attenuation value
+	//vO is vector pointing from the light to the object
+	//vL is the direction of the light
+	if(theta == 0 || a0 == 0) return 1;	//If we aren't using spotlights, we can just return 1
 	if(vO[0]*vL[0] + vO[1]*vL[1] + vO[2]*vL[2] < cos(theta)){
 		return 0;
 	}
 	return pow(vO[0]*vL[0] + vO[1]*vL[1] + vO[2]*vL[2], a0);
 }
 
-double frad(double a0, double a1, double a2, double distance){	//Return radial attenuation
-	if(distance == 0) return 1;
-	double denominator = (a0 + a1*distance + a2*sqr(distance));
-	if (denominator == 0) return 1;
-	return 1/denominator;
+double frad(double a0, double a1, double a2, double distance){	//Return radial attenuation value
+	if(distance == 0) return 1;		//If the light is somehow on the object, return 1
+	double denominator = (a0 + a1*distance + a2*sqr(distance));	//Calculate denominator of radial attenuation fnc
+	if (denominator == 0) return 1;	//If denominator is a faulty value of 0, return 1
+	return 1/denominator;	//If everything goes smoothly, return the real radial attenuation value
 }
 
 double* diffuse(double* L, double* N, double* Cd, double* Ci){	//Return diffuse color value
 	//Cd is diffuse color, and Ci is light color
 	double* diffused_color = malloc(sizeof(double)*3);
+	//Calculate diffuse color values
 	diffused_color[0] = (L[0] * N[0] + L[1] * N[1] + L[2] * N[2])*Cd[0]*Ci[0];
 	diffused_color[1] = (L[0] * N[0] + L[1] * N[1] + L[2] * N[2])*Cd[1]*Ci[1];
 	diffused_color[2] = (L[0] * N[0] + L[1] * N[1] + L[2] * N[2])*Cd[2]*Ci[2];
-	return diffused_color;
+	if(diffused_color[0] < 0) diffused_color[0] = 0;	//Diffuse colors cannot be negative
+	if(diffused_color[1] < 0) diffused_color[1] = 0;
+	if(diffused_color[2] < 0) diffused_color[2] = 0;
+	return diffused_color;		//Return diffuse color
 }
 
-double* specular(double* R, double* V, double* Cs, double* Ci, double* N, double* L){
+double* specular(double* R, double* V, double* Cs, double* Ci, double* N, double* L){	//Return specular color value
 	double* speculared_color = malloc(sizeof(double)*3);
 	if(N[0]*L[0] + N[1]*L[1] + N[2]*L[2] <= 0 || R[0]*V[0] + R[1]*V[1] + R[2]*V[2] <= 0){
+		//If our object normal, and vector from the light to object dot product is 0 or negative,
+		//return speculared_colors of {0,0,0}
 		speculared_color[0] = 0;
 		speculared_color[1] = 0;
 		speculared_color[2] = 0;
 		return speculared_color;
 	}
+	//Calculate specular color, with ns value hardcoded to 20
 	speculared_color[0] = pow((R[0]*V[0] + R[1]*V[1] + R[2]*V[2]), 20)*Cs[0]*Ci[0];
 	speculared_color[1] = pow((R[0]*V[0] + R[1]*V[1] + R[2]*V[2]), 20)*Cs[1]*Ci[1];
 	speculared_color[2] = pow((R[0]*V[0] + R[1]*V[1] + R[2]*V[2]), 20)*Cs[2]*Ci[2];
-	if(speculared_color[0] < 0) speculared_color[0] = 0;
+	if(speculared_color[0] < 0) speculared_color[0] = 0;	//Specular color may not be negative
 	if(speculared_color[1] < 0) speculared_color[1] = 0;
 	if(speculared_color[2] < 0) speculared_color[2] = 0;
-	return speculared_color;
+	return speculared_color;	//Return specular color
 }
 
-double calculate_distance(double* input_vector){
+double calculate_distance(double* input_vector){	//Calculate the magnitude/distance of the input vector
 	return sqrt(sqr(input_vector[0]) + sqr(input_vector[1]) + sqr(input_vector[2]));
 }
 
-double* reflect(double* L, double* N){
+double* reflect(double* L, double* N){	//Reflect vector L across a normal N
 	double* reflect_vector = malloc(sizeof(double)*3);
 	reflect_vector[0] = L[0] - 2*((L[0] * N[0]) + (L[1] * N[1]) + (L[2] * N[2])) * N[0];
 	reflect_vector[1] = L[1] - 2*((L[0] * N[0]) + (L[1] * N[1]) + (L[2] * N[2])) * N[1];
@@ -650,7 +660,7 @@ double* reflect(double* L, double* N){
 }
 
 double* render_light(Object** object_array, int object_counter, double best_t,
-					int best_index, double* Ro, double* Rd){
+					int best_index, double* Ro, double* Rd){	//Calculate color values using lights
 	double t = 0;
 	int parse_count = 1;
 	int parse_count1 = 1;
@@ -664,100 +674,103 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 	double* R;
 	double V[3];
 	double distance_from_light;
-	int closest_shadow_index = -1;
 	
 	
-	Ron[0] = best_t * Rd[0] + Ro[0];
+	Ron[0] = best_t * Rd[0] + Ro[0];	//Calculate the intersection point of the object we hit
 	Ron[1] = best_t * Rd[1] + Ro[1];
 	Ron[2] = best_t * Rd[2] + Ro[2];
 			
 	parse_count = 1;
 	parse_count1 = 1;
-	closest_shadow_index = -1;
 	
-	color[0] = 0;
+	color[0] = 0;	//Set color value to black (for now)
 	color[1] = 0;
 	color[2] = 0;
 	
-	while(parse_count < object_counter + 1){
+	while(parse_count < object_counter + 1){	//Iterate through object array and check for lights
 		if(object_array[parse_count]->kind == 3){
+			//Create vector pointing to light source, originating from our intersection
 			Rdn[0] = object_array[parse_count]->light.position[0] - Ron[0];
 			Rdn[1] = object_array[parse_count]->light.position[1] - Ron[1];
 			Rdn[2] = object_array[parse_count]->light.position[2] - Ron[2];
-			distance_from_light = calculate_distance(Rdn);
-			normalize(Rdn);
+			distance_from_light = calculate_distance(Rdn);	//Calculate distance from light to intersection
+			normalize(Rdn);	//normalize our object to light vector
 			
-			while(parse_count1 < object_counter + 1){
-				if(parse_count1 == best_index){
+			while(parse_count1 < object_counter + 1){	//Check to see if our point of intersection is in shadow
+				if(parse_count1 == best_index){	//The object we intersected cannot overshadow itself!
 					parse_count1++;
 					continue;
 				}
-				if(object_array[parse_count1]->kind == 1){
+				if(object_array[parse_count1]->kind == 1){	//See if a sphere overshadows our point of intersection
 					t = sphere_intersection(Ron, Rdn, object_array[parse_count1]->sphere.position,
 									object_array[parse_count1]->sphere.radius);			
 					parse_count1++;
-				}else if(object_array[parse_count1]->kind == 2){
+				}else if(object_array[parse_count1]->kind == 2){ //See if a plane overshadows our point of intersection
 					t = plane_intersection(Ron, Rdn, object_array[parse_count1]->plane.position,
 											object_array[parse_count1]->plane.normal);
 					parse_count1++;
-				}else{
+				}else{	//If a light was found, skip it
 					parse_count1++;
 					continue;
 				}
 				
-				if(t > 0 && t < distance_from_light){
+				if(t > 0 && t < distance_from_light){	//If a valid overshadowing object was found, break
 					break;
-				}else if(t > 0 && t > distance_from_light){
+				}else if(t > 0 && t > distance_from_light){ //If object found behind light, it does not cast a shadow
 					t = 0;
 				}
 			}
 			
-			L[0] = Rdn[0];
+			L[0] = Rdn[0];	//Store object to light vector into L
 			L[1] = Rdn[1];
 			L[2] = Rdn[2];
 			
-			V[0] = Rd[0];
+			V[0] = Rd[0];	//Store vector pointing from camera to object
 			V[1] = Rd[1];
 			V[2] = Rd[2];
 			
 			if(t <= 0){
 				if(object_array[best_index]->kind == 1){
-					//N, L, R, V
+					//Find normal of sphere
 					N[0] = Ron[0] - object_array[best_index]->sphere.position[0];
 					N[1] = Ron[1] - object_array[best_index]->sphere.position[1];
 					N[2] = Ron[2] - object_array[best_index]->sphere.position[2];
 					normalize(N);
 					
-					R = reflect(L, N);
+					R = reflect(L, N);	//Get reflected vector of L
 					
+					//Calculate diffuse and specular color
 					diffused_color = diffuse(L, N, object_array[best_index]->sphere.diffuse_color,
 												object_array[parse_count]->light.color);
 					speculared_color = specular(R, V, object_array[best_index]->sphere.specular_color,
 												object_array[parse_count]->light.color, N, L);
 					
 				}else if(object_array[best_index]->kind == 2){
-					//N, L, R, V
-					N[0] = object_array[best_index]->plane.normal[0]; //Get normal of plane
+					//Find normal of plane
+					N[0] = object_array[best_index]->plane.normal[0];
 					N[1] = object_array[best_index]->plane.normal[1];
 					N[2] = object_array[best_index]->plane.normal[2];
 					
 					
-					R = reflect(L, N);
+					R = reflect(L, N);  //Get reflected vector of L
 					
+					//Calculate diffuse and specular color
 					diffused_color = diffuse(L, N, object_array[best_index]->plane.diffuse_color,
 												object_array[parse_count]->light.color);
 					speculared_color = specular(R, V, object_array[best_index]->plane.specular_color,
 												object_array[parse_count]->light.color, N, L);
-
+					
 				}
-				else{
+				else{	//If the current object is somehow a light
 					fprintf(stderr,"Error: Tried to render light as a shape primitive");
 					exit(1);
 				}
 				
+				//Reverse direction of Rdn to be used in angular attenuation calculations
 				Rdn[0] = -Rdn[0];
 				Rdn[1] = -Rdn[1];
 				Rdn[2] = -Rdn[2];
+				//Add total light values together
 				color[0] += frad(object_array[parse_count]->light.radial_a0,
 								object_array[parse_count]->light.radial_a1,
 								object_array[parse_count]->light.radial_a2, best_t) *
@@ -779,7 +792,7 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 								object_array[parse_count]->light.theta, Rdn,
 								object_array[parse_count]->light.direction) *
 								(diffused_color[2] + speculared_color[2]);
-				free(diffused_color);
+				free(diffused_color);	//free memory
 				free(speculared_color);
 				free(R);
 			}
@@ -788,6 +801,7 @@ double* render_light(Object** object_array, int object_counter, double best_t,
 		}
 		parse_count++;
 	}
+	//Clamp color values
 	color[0] = clamp(color[0]);
 	color[1] = clamp(color[1]);
 	color[2] = clamp(color[2]);
@@ -856,6 +870,7 @@ void raycast_scene(Object** object_array, int object_counter, double** pixel_buf
 
 			
 			if(best_t > 0 && best_t != INFINITY){	//If our closest intersection is valid...
+				//render light, and store the outputted colors into our pixel array
 				color = render_light(object_array, object_counter, best_t, best_index, Ro, Rd);
 				pixel_buffer[(int)((N*M) - (floor(pixel_count/N) + 1)*N)+ pixel_count%N][0] = color[0];
 				pixel_buffer[(int)((N*M) - (floor(pixel_count/N) + 1)*N)+ pixel_count%N][1] = color[1];
