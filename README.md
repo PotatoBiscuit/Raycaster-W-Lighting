@@ -14,3 +14,9 @@ or use the Makefile
 Usage goes as follows:
 
 raycast width height input.json output.ppm
+
+
+
+
+
+Special Note: Although it says that this code supports Parallel Lights in the commits, it was removed later on
